@@ -1,0 +1,24 @@
+.env
+
+# OS generated files #
+######################
+.DS_Store
+__MACOSX
+
+# Jupiter Notebook #
+*.ipynb
+
+# inteliJ #
+.idea
+*.gz
+*PKG-INFO
+*.egg-info
+*.csv
+05-ML/**/*.txt
+06-Deep-Learning/**/*.txt
+*.zip
+mlruns
+*.sqlite
+
+# IDE #
+*.vscode
