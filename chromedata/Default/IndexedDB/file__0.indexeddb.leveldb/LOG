@@ -1,1 +1,5 @@
-2023/06/20-21:04:56.846 11503 Reusing MANIFEST /Users/julienfraysse/code/JFFraysse/derks-gym/chromedata/Default/IndexedDB/file__0.indexeddb.leveldb/MANIFEST-000001
+2023/06/22-20:13:09.338 660b Reusing MANIFEST /Users/julienfraysse/code/JFFraysse/derks-gym/chromedata/Default/IndexedDB/file__0.indexeddb.leveldb/MANIFEST-000001
+2023/06/22-20:13:51.145 660b Level-0 table #5: started
+2023/06/22-20:13:51.161 660b Level-0 table #5: 1080 bytes OK
+2023/06/22-20:13:51.189 660b Delete type=0 #3
+2023/06/22-20:13:51.191 660b Manual compaction at level-0 from (begin) .. (end); will stop at (end)
