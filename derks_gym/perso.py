@@ -12,8 +12,6 @@ from gym_derk.derk_server import DerkAgentServer, DerkSession
 import logging
 
 class EnvPerso(DerkEnv):
-    def __init__(self):
-        super().__init__()
 
     def reset(self) -> np.ndarray:
         return asyncio.get_event_loop().run_until_complete(self.async_reset())[0]
