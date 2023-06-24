@@ -5,9 +5,6 @@
 .DS_Store
 __MACOSX
 
-# Jupiter Notebook #
-*.ipynb
-
 # inteliJ #
 .idea
 *.gz
