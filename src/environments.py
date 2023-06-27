@@ -30,7 +30,7 @@ reward_spec = array_spec.ArraySpec(
 
 class EnvSix(DerkEnv):
     @property
-    def observation_space(self):
+    def observation_spec(self):
         return tensor_spec.BoundedTensorSpec(
             shape=(64,),
             dtype=np.float32,
@@ -48,8 +48,7 @@ class EnvSix(DerkEnv):
 
 
 class EnvPerso(DerkEnv):
-    @property
-    def observation_space(self):
+    def observation_spec(self):
         return tensor_spec.BoundedTensorSpec(
             shape=(64,),
             dtype=np.float32,
@@ -57,13 +56,24 @@ class EnvPerso(DerkEnv):
             maximum=1.0,
             name='observation'
         )
-    @property
+
+    def action_spec(self):
+        return array_spec.BoundedArraySpec(
+            shape=(7,),
+            dtype=np.float32,
+            minimum=0,
+            maximum=1,
+            name='action'
+        )
+
     def reward_spec(self):
         return array_spec.ArraySpec(
             shape=(),
             dtype=np.float32,
             name='reward'
         )
+    def time_step_spec(self):
+        return ts.time_step_spec(observation=self.observation_spec(), reward=self.reward_spec())
 
 
     def reset(self) -> np.ndarray:
@@ -74,6 +84,11 @@ class EnvPerso(DerkEnv):
         action_n = np.array([action, *random_action])
         resultats = asyncio.get_event_loop().run_until_complete(self.async_step(action_n))
         return resultats[0][0], resultats[1][0], resultats[2], resultats[3]
+
+
+
+
+
 
 
 class EnvPersoInput(DerkEnv):
