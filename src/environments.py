@@ -14,6 +14,7 @@ from tf_agents.trajectories import time_step as ts
 from tf_agents.specs import tensor_spec
 from tf_agents.specs import array_spec
 import numpy as np
+import tensorflow as tf
 
 # Define the observation spec
 
@@ -58,22 +59,19 @@ class EnvPerso(DerkEnv):
         )
 
     def action_spec(self):
-        return array_spec.BoundedArraySpec(
-            shape=(7,),
-            dtype=np.float32,
-            minimum=0,
-            maximum=1,
-            name='action'
-        )
+        return tensor_spec.BoundedTensorSpec(
+            shape=(15,), dtype=np.float32, minimum=-1, maximum=1, name='action')
 
     def reward_spec(self):
-        return array_spec.ArraySpec(
+        return tensor_spec.BoundedTensorSpec(
             shape=(),
-            dtype=np.float32,
+            dtype=tf.float32,
+            minimum=0,
+            maximum=np.inf,
             name='reward'
         )
     def time_step_spec(self):
-        return ts.time_step_spec(observation=self.observation_spec(), reward=self.reward_spec())
+        return ts.time_step_spec(observation_spec=self.observation_spec(), reward_spec=self.reward_spec())
 
 
     def reset(self) -> np.ndarray:
@@ -91,7 +89,7 @@ class EnvPerso(DerkEnv):
 
 
 
-class EnvPersoInput(DerkEnv):
+class EnvPersoInput(EnvPerso):
     def reset(self) -> np.ndarray:
         return asyncio.get_event_loop().run_until_complete(self.async_reset())[0]
 
@@ -99,6 +97,8 @@ class EnvPersoInput(DerkEnv):
         # make negative value to 0
         odds[odds<0] = 0
         normalized_odds = np.array(odds) / sum(odds)
+        # replace NaN with 0
+        normalized_odds = np.nan_to_num(normalized_odds)
         return np.random.choice(len(odds), p=normalized_odds)
 
     def step(self, action):
@@ -107,11 +107,11 @@ class EnvPersoInput(DerkEnv):
         real_action.append(action[1])
         real_action.append(max(action[2], 0))
 
-        spells = self.odds(action[3:7])
-        focus = self.odds(action[7:])
+        spells = self.pick(action[3:7])
+        focus = self.pick(action[7:])
         real_action.append(spells)
         real_action.append(focus)
         random_action = [self.action_space.sample() for i in range(5)]
-        action_n = np.array([action, *random_action])
+        action_n = np.array([real_action, *random_action])
         resultats = asyncio.get_event_loop().run_until_complete(self.async_step(action_n))
         return resultats[0][0], resultats[1][0], resultats[2], resultats[3]
