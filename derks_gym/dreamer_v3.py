@@ -1,3 +1,11 @@
+from perso import *
+
+import nest_asyncio
+nest_asyncio.apply()
+
+from gym_derk.envs import DerkEnv
+import gym_derk
+
 def main():
 
   import warnings
@@ -32,13 +40,9 @@ def main():
       # embodied.logger.MLFlowOutput(logdir.name),
   ])
 
+  import crafter
   from embodied.envs import from_gym
-  from gym_derk.envs import DerkEnv
-  import nest_asyncio
-  nest_asyncio.apply
-  import derks_gym
-
-  env = DerkEnv()  # Replace this with your Gym env.
+  env = crafter.Env()  # Replace this with your Gym env.
   env = from_gym.FromGym(env, obs_key='image')  # Or obs_key='vector'.
   env = dreamerv3.wrap_env(env, config)
   env = embodied.BatchEnv([env], parallel=False)
@@ -51,6 +55,7 @@ def main():
       batch_steps=config.batch_size * config.batch_length)
   embodied.run.train(agent, env, replay, logger, args)
   # embodied.run.eval_only(agent, env, logger, args)
+
 
 if __name__ == '__main__':
   main()
