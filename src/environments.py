@@ -14,25 +14,13 @@ from tf_agents.trajectories import time_step as ts
 from tf_agents.specs import tensor_spec
 from tf_agents.specs import array_spec
 import numpy as np
+import tf_agents
 import tensorflow as tf
-
-# Define the observation spec
-
-
-# Define the reward spec
-reward_spec = array_spec.ArraySpec(
-    shape=(),
-    dtype=np.float32,
-    name='reward'
-)
-
-# Create the time step spec
-# time_step_spec = ts.time_step_spec(observation=observation_spec, reward=reward_spec)
 
 class EnvSix(DerkEnv):
     @property
     def observation_spec(self):
-        return tensor_spec.BoundedTensorSpec(
+        return tf_agents.specs.BoundedArraySpec(
             shape=(64,),
             dtype=np.float32,
             minimum=-1.0,
@@ -50,7 +38,7 @@ class EnvSix(DerkEnv):
 
 class EnvPerso(DerkEnv):
     def observation_spec(self):
-        return tensor_spec.BoundedTensorSpec(
+        return tf_agents.specs.BoundedArraySpec(
             shape=(64,),
             dtype=np.float32,
             minimum=-1.0,
@@ -59,13 +47,13 @@ class EnvPerso(DerkEnv):
         )
 
     def action_spec(self):
-        return tensor_spec.BoundedTensorSpec(
+        return tf_agents.specs.BoundedArraySpec(
             shape=(15,), dtype=np.float32, minimum=-1, maximum=1, name='action')
 
     def reward_spec(self):
-        return tensor_spec.BoundedTensorSpec(
+        return tf_agents.specs.BoundedArraySpec(
             shape=(),
-            dtype=tf.float32,
+            dtype=np.float32,
             minimum=0,
             maximum=np.inf,
             name='reward'
@@ -74,7 +62,7 @@ class EnvPerso(DerkEnv):
         return ts.time_step_spec(observation_spec=self.observation_spec(), reward_spec=self.reward_spec())
 
 
-    def reset(self) -> np.ndarray:
+    def reset(self):
         return asyncio.get_event_loop().run_until_complete(self.async_reset())[0]
 
     def step(self, action):
@@ -83,22 +71,19 @@ class EnvPerso(DerkEnv):
         resultats = asyncio.get_event_loop().run_until_complete(self.async_step(action_n))
         return resultats[0][0], resultats[1][0], resultats[2], resultats[3]
 
-
-
-
-
-
-
 class EnvPersoInput(EnvPerso):
-    def reset(self) -> np.ndarray:
+    def reset(self):
         return asyncio.get_event_loop().run_until_complete(self.async_reset())[0]
 
     def pick(self, odds: np.ndarray):
         # make negative value to 0
         odds[odds<0] = 0
+        odds = odds + 0.001
         normalized_odds = np.array(odds) / sum(odds)
         # replace NaN with 0
-        normalized_odds = np.nan_to_num(normalized_odds)
+        # make sure the sum is 1
+        normalized_odds /= normalized_odds.sum()
+
         return np.random.choice(len(odds), p=normalized_odds)
 
     def step(self, action):
@@ -115,3 +100,61 @@ class EnvPersoInput(EnvPerso):
         action_n = np.array([real_action, *random_action])
         resultats = asyncio.get_event_loop().run_until_complete(self.async_step(action_n))
         return resultats[0][0], resultats[1][0], resultats[2], resultats[3]
+
+
+class EnvTensorOne(EnvPersoInput, tf_agents.environments.py_environment.PyEnvironment):
+    def reset(self):
+        obs = asyncio.get_event_loop().run_until_complete(self.async_reset())[0]
+        return ts.restart(observation = obs)
+    def _reset(self):
+        obs = asyncio.get_event_loop().run_until_complete(self.async_reset())[0]
+        return ts.restart(observation = obs)
+
+    def current_time_step(self):
+        return self._current_time_step
+
+    def _step(self, action):
+        observation, reward, done, info = EnvPersoInput.step(self, action=action)
+        self._current_time_step = ts.transition(observation=observation, reward=reward, discount=1.0)
+        if all(done):
+            return ts.termination(observation = observation, reward = reward)
+        else:
+            return ts.transition(observation=observation, reward=reward, discount=1.0)
+    def step(self, action):
+        observation, reward, done, info = EnvPersoInput.step(self, action=action)
+        self._current_time_step = ts.transition(observation=observation, reward=reward, discount=1.0)
+        if all(done):
+            self.reset()
+            return ts.termination(observation = observation, reward = reward)
+        else:
+            return ts.transition(observation=observation, reward=reward, discount=1.0)
+
+
+# class tensorEnv(py_environment.PyEnvironment, DerkEnv):
+#     def observation_spec(self):
+#         return tensor_spec.BoundedArraySpec(
+#             shape=(64,),
+#             dtype=np.float32,
+#             minimum=-1.0,
+#             maximum=1.0,
+#             name='observation'
+#         )
+
+#     def action_spec(self):
+#         return tensor_spec.BoundedArraySpec(
+#             shape=(15,), dtype=np.float32, minimum=-1, maximum=1, name='action')
+
+#     def reward_spec(self):
+#         return tensor_spec.BoundedArraySpec(
+#             shape=(),
+#             dtype=tf.float32,
+#             minimum=0,
+#             maximum=np.inf,
+#             name='reward'
+#         )
+#     def time_step_spec(self):
+#         return ts.time_step_spec(observation_spec=self.observation_spec(), reward_spec=self.reward_spec())
+
+#     def _reset(self):
+
+#         return ts.restart(self.observation_spec())
