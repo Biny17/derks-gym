@@ -42,10 +42,14 @@ class EnvSix(DerkEnv):
         return real_action
 
     def step(self, actions):
-        actions = actions.reshape(6, 15)
+        actions = actions.reshape(self.n_arenas, 6, 15)
         real_actions = []
-        for action in actions:
-            real_actions.append(self.prepoc(action))
+        arena_action = []
+        for i in range(self.n_arenas):
+            for action in actions:
+                arena_action.append(self.prepoc(action))
+            real_actions.append(arena_action)
+            arena_action = []
         resultats = asyncio.get_event_loop().run_until_complete(self.async_step(real_actions))
         return resultats
 
@@ -172,22 +176,35 @@ class EnvTensorOne(EnvPersoInput, tf_agents.environments.py_environment.PyEnviro
 
     def _step(self, action):
         observation, reward, done, info = EnvPersoInput.step(self, action=action)
-        self._current_time_step = ts.transition(observation=observation, reward=reward, discount=1.0)
+        self._current_time_step = ts.transition(observation=observation.flatten(), reward=reward, discount = 1.0)
+        print(type(observation))
         if all(done):
-            return ts.termination(observation = observation, reward = reward)
+            self.reset()
+            return ts.termination(observation = observation.flatten(), reward = reward)
         else:
-            return ts.transition(observation=observation, reward=reward, discount=1.0)
+            return ts.transition(observation=observation.flatten(), reward=reward, discount = 1.0)
+
     def step(self, action):
         observation, reward, done, info = EnvPersoInput.step(self, action=action)
-        self._current_time_step = ts.transition(observation=observation, reward=reward, discount=1.0)
-        observation = tf.convert_to_tensor(observation, dtype=tf.float32)
-        reward = tf.convert_to_tensor(reward, dtype=tf.float32)
+        self._current_time_step = ts.transition(observation=observation.flatten(), reward=reward, discount = 1.0)
+        print(type(observation))
         if all(done):
-            print("done")
             self.reset()
-            return ts.termination(observation = observation, reward = reward)
+            return ts.termination(observation = observation.flatten(), reward = reward)
         else:
-            return ts.transition(observation=observation, reward=reward, discount=1.0)
+            return ts.transition(observation = observation.flatten(), reward=reward, discount = 1.0)
+
+    # def step(self, action):
+    #     observation, reward, done, info = EnvPersoInput.step(self, action=action)
+    #     self._current_time_step = ts.transition(observation=observation, reward=reward, discount=1.0)
+    #     observation = tf.convert_to_tensor(observation, dtype=tf.float32)
+    #     reward = tf.convert_to_tensor(reward, dtype=tf.float32)
+    #     if all(done):
+    #         print("done")
+    #         self.reset()
+    #         return ts.termination(observation = observation, reward = reward)
+    #     else:
+    #         return ts.transition(observation=observation, reward=reward, discount=1.0)
 
 
 # class tensorEnv(py_environment.PyEnvironment, DerkEnv):
