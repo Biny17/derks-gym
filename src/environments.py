@@ -187,9 +187,6 @@ class EnvTensorOne(EnvPersoInput, tf_agents.environments.py_environment.PyEnviro
             self.reset()
             return ts.termination(observation = observation, reward = reward)
         else:
-            print(observation.shape)
-            print(observation)
-            print(reward)
             return ts.transition(observation=observation, reward=reward, discount=1.0)
 
 
