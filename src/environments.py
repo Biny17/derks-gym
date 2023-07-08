@@ -1,7 +1,6 @@
 import nest_asyncio
 nest_asyncio.apply()
 from gym_derk.envs import DerkEnv
-import gym_derk
 import gym
 import asyncio
 import os
@@ -18,6 +17,14 @@ import tf_agents
 import tensorflow as tf
 
 class EnvSix(DerkEnv):
+    def __init__(self, n_arenas, *args, **kwargs):
+        self.n_arenas = n_arenas
+        self.space_action = gym.spaces.Box(low=-1, high=1, shape=(15,), dtype=np.float32)
+        super().__init__(*args, **kwargs, n_arenas=n_arenas)
+
+    def reset(self):
+        return super().reset().reshape(self.n_arenas, 6, 64)
+
     def pick(self, odds: np.ndarray):
         # make negative value to 0
         odds[odds<0] = 0
@@ -42,16 +49,10 @@ class EnvSix(DerkEnv):
         return real_action
 
     def step(self, actions):
-        actions = actions.reshape(self.n_arenas, 6, 15)
-        real_actions = []
-        arena_action = []
-        for i in range(self.n_arenas):
-            for action in actions:
-                arena_action.append(self.prepoc(action))
-            real_actions.append(arena_action)
-            arena_action = []
-        resultats = asyncio.get_event_loop().run_until_complete(self.async_step(real_actions))
-        return resultats
+        #actions = actions.reshape(self.n_arenas, 6, 15)
+        processed_actions = np.apply_along_axis(self.prepoc, -1, actions)
+        resultats = asyncio.get_event_loop().run_until_complete(self.async_step(processed_actions))
+        return resultats[0].reshape(self.n_arenas, 6, 64), resultats[1].reshape(self.n_arenas, 6), resultats[2], resultats[3]
 
 
 class EnvPerso(DerkEnv):
@@ -220,7 +221,7 @@ class EnvTensorOne(EnvPersoInput, tf_agents.environments.py_environment.PyEnviro
     #         self.reset()
     #         return ts.termination(observation = observation.flatten(), reward = reward)
     #     else:
-    #         return ts.transition(observation = observation.flatten(), reward=reward, discount = 1.0) 
+    #         return ts.transition(observation = observation.flatten(), reward=reward, discount = 1.0)
 
 # class tensorEnv(py_environment.PyEnvironment, DerkEnv):
 #     def observation_spec(self):
