@@ -125,6 +125,8 @@ class EnvPersoInput(EnvPerso):
         return np.random.choice(len(odds), p=normalized_odds)
 
     def step(self, action):
+        # convert action to numpy array from tensor
+        action = action.numpy()
         real_action = []
         real_action.append(action[0])
         real_action.append(action[1])
@@ -143,9 +145,11 @@ class EnvPersoInput(EnvPerso):
 class EnvTensorOne(EnvPersoInput, tf_agents.environments.py_environment.PyEnvironment):
     def reset(self):
         obs = asyncio.get_event_loop().run_until_complete(self.async_reset())[0]
+        obs = tf.convert_to_tensor(obs, dtype=tf.float32)
         return ts.restart(observation = obs)
     def _reset(self):
         obs = asyncio.get_event_loop().run_until_complete(self.async_reset())[0]
+        obs = tf.convert_to_tensor(obs, dtype=tf.float32)
         return ts.restart(observation = obs)
 
     def observation_spec(self):
@@ -174,38 +178,49 @@ class EnvTensorOne(EnvPersoInput, tf_agents.environments.py_environment.PyEnviro
     def current_time_step(self):
         return self._current_time_step
 
-    def _step(self, action):
-        observation, reward, done, info = EnvPersoInput.step(self, action=action)
-        self._current_time_step = ts.transition(observation=observation.flatten(), reward=reward, discount = 1.0)
-        print(type(observation))
-        if all(done):
-            self.reset()
-            return ts.termination(observation = observation.flatten(), reward = reward)
-        else:
-            return ts.transition(observation=observation.flatten(), reward=reward, discount = 1.0)
 
     def step(self, action):
         observation, reward, done, info = EnvPersoInput.step(self, action=action)
-        self._current_time_step = ts.transition(observation=observation.flatten(), reward=reward, discount = 1.0)
-        print(type(observation))
+        self._current_time_step = ts.transition(observation=observation, reward=reward, discount=1.0)
+        observation = tf.convert_to_tensor(observation, dtype=tf.float32)
+        reward = tf.convert_to_tensor(reward, dtype=tf.float32)
         if all(done):
+            print("done")
             self.reset()
-            return ts.termination(observation = observation.flatten(), reward = reward)
+            return ts.termination(observation = observation, reward = reward)
         else:
-            return ts.transition(observation = observation.flatten(), reward=reward, discount = 1.0)
+            return ts.transition(observation=observation, reward=reward, discount=1.0)
+    def _step(self, action):
+        observation, reward, done, info = EnvPersoInput.step(self, action=action)
+        self._current_time_step = ts.transition(observation=observation, reward=reward, discount=1.0)
+        observation = tf.convert_to_tensor(observation, dtype=tf.float32)
+        reward = tf.convert_to_tensor(reward, dtype=tf.float32)
+        if all(done):
+            print("done")
+            self.reset()
+            return ts.termination(observation = observation, reward = reward)
+        else:
+            return ts.transition(observation=observation, reward=reward, discount=1.0)
+
+    # def _step(self, action):
+    #     observation, reward, done, info = EnvPersoInput.step(self, action=action)
+    #     self._current_time_step = ts.transition(observation=observation.flatten(), reward=reward, discount = 1.0)
+    #     print(type(observation))
+    #     if all(done):
+    #         self.reset()
+    #         return ts.termination(observation = observation.flatten(), reward = reward)
+    #     else:
+    #         return ts.transition(observation=observation.flatten(), reward=reward, discount = 1.0)
 
     # def step(self, action):
     #     observation, reward, done, info = EnvPersoInput.step(self, action=action)
-    #     self._current_time_step = ts.transition(observation=observation, reward=reward, discount=1.0)
-    #     observation = tf.convert_to_tensor(observation, dtype=tf.float32)
-    #     reward = tf.convert_to_tensor(reward, dtype=tf.float32)
+    #     self._current_time_step = ts.transition(observation=observation.flatten(), reward=reward, discount = 1.0)
+    #     print(type(observation))
     #     if all(done):
-    #         print("done")
     #         self.reset()
-    #         return ts.termination(observation = observation, reward = reward)
+    #         return ts.termination(observation = observation.flatten(), reward = reward)
     #     else:
-    #         return ts.transition(observation=observation, reward=reward, discount=1.0)
-
+    #         return ts.transition(observation = observation.flatten(), reward=reward, discount = 1.0) 
 
 # class tensorEnv(py_environment.PyEnvironment, DerkEnv):
 #     def observation_spec(self):
