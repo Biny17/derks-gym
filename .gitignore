@@ -21,3 +21,5 @@ mlruns
 *.vscode
 
 chromedata
+
+__pycache__
