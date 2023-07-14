@@ -16,6 +16,7 @@ import numpy as np
 import tf_agents
 import tensorflow as tf
 
+
 class EnvSix(DerkEnv):
     def __init__(self, n_arenas, *args, **kwargs):
         self.n_arenas = n_arenas
@@ -25,28 +26,9 @@ class EnvSix(DerkEnv):
     def reset(self):
         return super().reset().reshape(self.n_arenas, 6, 64)
 
-    def pick(self, odds: np.ndarray):
-        # make negative value to 0
-        odds[odds<0] = 0
-        odds = odds + 0.001
-        normalized_odds = np.array(odds) / sum(odds)
-        # replace NaN with 0
-        # make sure the sum is 1
-        normalized_odds /= normalized_odds.sum()
-
-        return np.random.choice(len(odds), p=normalized_odds)
-
-    def prepoc(self, action):
-        real_action = []
-        real_action.append(action[0])
-        real_action.append(action[1])
-        real_action.append(max(action[2], 0))
-
-        spells = self.pick(action[3:7])
-        focus = self.pick(action[7:])
-        real_action.append(spells)
-        real_action.append(focus)
-        return real_action
+    def prepoc(self, actions):
+    # MoveX Rotate Chase Cast0 1 2 3 Focus 0 1 2 3 4 5 6 7
+        return np.array([*actions[0:2], max(actions[2], 0), np.argmax(actions[3:7]), np.argmax(actions[7:])])
 
     def step(self, actions):
         #actions = actions.reshape(self.n_arenas, 6, 15)
@@ -55,8 +37,8 @@ class EnvSix(DerkEnv):
         return resultats[0].reshape(self.n_arenas, 6, 64), resultats[1].reshape(self.n_arenas, 6), resultats[2], resultats[3]
 
 
-class EnvPerso(DerkEnv):
-    def observation_tensor_spec(self):
+class EnvSpecTensor(DerkEnv):
+    def observation_spec(self):
         return tensor_spec.BoundedTensorSpec(
             shape=(64,),
             dtype=np.float32,
@@ -64,86 +46,138 @@ class EnvPerso(DerkEnv):
             maximum=1.0,
             name='observation'
         )
-    def observation_spec(self):
-        return tf_agents.specs.BoundedArraySpec(
-            shape=(64,),
-            dtype=np.float32,
-            minimum=-1.0,
-            maximum=1.0,
-            name='observation'
-        )
-
-    def action_tensor_spec(self):
+    def action_spec(self):
         return  tensor_spec.BoundedTensorSpec(
             shape=(15,), dtype=np.float32, minimum=-1, maximum=1, name='action')
-    def action_spec(self):
-        return tf_agents.specs.BoundedArraySpec(
-            shape=(15,), dtype=np.float32, minimum=-1, maximum=1, name='action')
-
-    def reward_tensor_spec(self):
+    def reward_spec(self):
         return tensor_spec.BoundedTensorSpec(
             shape=(),
             dtype=np.float32,
-            minimum=0,
-            maximum=np.inf,
-            name='reward'
-        )
-    def reward_spec(self):
-        return tf_agents.specs.BoundedArraySpec(
-            shape=(),
-            dtype=np.float32,
-            minimum=0,
-            maximum=np.inf,
+            minimum=-2000,
+            maximum=2000,
             name='reward'
         )
     def time_step_spec(self):
         self._time_step_spec = ts.time_step_spec(observation_spec=self.observation_spec(), reward_spec=self.reward_spec())
         return self._time_step_spec
 
+    def input_converter(self, actions):
+    # MoveX Rotate Chase Cast0 1 2 3 Focus 0 1 2 3 4 5 6 7
+        return np.array([*actions[0:2], max(actions[2], 0), np.argmax(actions[3:7]), np.argmax(actions[7:])])
+    
 
-    def reset(self):
-        return asyncio.get_event_loop().run_until_complete(self.async_reset())[0]
 
+class EnvTensorOne(EnvSpecTensor, tf_agents.environments.py_environment.PyEnvironment):
+    def reset(self, policy):
+        self.policy = policy
+        self.controlled = 0
+        print("controlled: ", self.controlled)
+        self.reward_perso = 0
+        obs = asyncio.get_event_loop().run_until_complete(self.async_reset())
+        self.full_obs = obs
+        obs = tf.convert_to_tensor(obs[self.controlled], dtype=tf.float32)
+        return ts.restart(observation = obs)
+    def _reset(self):
+        obs = asyncio.get_event_loop().run_until_complete(self.async_reset())[self.controlled]
+        obs = tf.convert_to_tensor(obs, dtype=tf.float32)
+        return ts.restart(observation = obs)
+
+    def current_time_step(self):
+        return self._current_time_step
+    
+    def make_time_step_policy(self, i):
+        # self.policy.action(self.full_obs[i])
+        timestep = ts.transition(observation = self.full_obs[i], reward = tf.constant([0]), discount = 1.0)
+        return self.input_converter(self.policy.action(timestep).action.numpy())
+    def random_action(self, i):
+        action = np.random.uniform(-1, 1, size=(15,))
+        return self.input_converter(action)
+    def oner(self, action):
+        # add policy actions
+        action_n = [self.make_time_step_policy(i) if (i != self.controlled) else action for i in range(6)]
+        
+        returned = asyncio.get_event_loop().run_until_complete(self.async_step(action_n))
+        self.full_obs = tf.convert_to_tensor(returned[0], dtype=np.float32)
+        return returned[0][self.controlled], returned[1][self.controlled], returned[2], returned[3]
+    
     def step(self, action):
-        random_action = [self.action_space.sample() for i in range(5)]
-        action_n = np.array([action, *random_action])
-        resultats = asyncio.get_event_loop().run_until_complete(self.async_step(action_n))
-        return resultats[0][0], resultats[1][0], resultats[2], resultats[3]
-
-class EnvPersoInput(EnvPerso):
-    def reset(self):
-        return asyncio.get_event_loop().run_until_complete(self.async_reset())[0]
-
-    def pick(self, odds: np.ndarray):
-        # make negative value to 0
-        odds[odds<0] = 0
-        odds = odds + 0.001
-        normalized_odds = np.array(odds) / sum(odds)
-        # replace NaN with 0
-        # make sure the sum is 1
-        normalized_odds /= normalized_odds.sum()
-
-        return np.random.choice(len(odds), p=normalized_odds)
-
-    def step(self, action):
-        # convert action to numpy array from tensor
         action = action.numpy()
-        real_action = []
-        real_action.append(action[0])
-        real_action.append(action[1])
-        real_action.append(max(action[2], 0))
+        action = self.input_converter(action)
+        observation, reward, done, info = self.oner(action)
+        self.reward_perso += reward
+        observation = tf.convert_to_tensor(observation)
+        reward = tf.convert_to_tensor(reward)
+        if reward.numpy() != 0:
+            print(f"{reward :.2f}")
+        self._current_time_step = ts.transition(observation=observation, reward=reward, discount=1.0)
+        if all(done):
+            print(f"total_reward: {self.reward_perso}")
+            return ts.termination(observation = observation, reward = reward)
+        else:
+            return ts.transition(observation = observation, reward = reward, discount=1.0)
+    def _step(self, action):
+        return self.step(action)
 
-        spells = self.pick(action[3:7])
-        focus = self.pick(action[7:])
-        real_action.append(spells)
-        real_action.append(focus)
-        random_action = [self.action_space.sample() for i in range(5)]
-        action_n = np.array([real_action, *random_action])
-        resultats = asyncio.get_event_loop().run_until_complete(self.async_step(action_n))
-        return resultats[0][0], resultats[1][0], resultats[2], resultats[3]
 
+class EnvTensorSix(EnvSpecTensor, tf_agents.environments.py_environment.PyEnvironment):
+    def reset(self):
+        obs = asyncio.get_event_loop().run_until_complete(self.async_reset())
+        obs = tf.convert_to_tensor(obs, dtype=tf.float32)
+        return ts.restart(observation = obs)
+    def _reset(self):
+        obs = asyncio.get_event_loop().run_until_complete(self.async_reset())
+        obs = tf.convert_to_tensor(obs, dtype=tf.float32)
+        return ts.restart(observation = obs)
 
-class EnvTensorOne(EnvPersoInput, tf_agents.environments.py_environment.PyEnvironment):
+    def observation_spec(self):
+        return tensor_spec.BoundedTensorSpec(
+            shape=(64,),
+            dtype=np.float32,
+            minimum=-1.0,
+            maximum=1.0,
+            name='observation'
+        )
+    def action_spec(self):
+        return  tensor_spec.BoundedTensorSpec(
+            shape=(15,), dtype=np.float32, minimum=-1, maximum=1, name='action')
+    def reward_spec(self):
+        return tensor_spec.BoundedTensorSpec(
+            shape=(),
+            dtype=np.float32,
+            minimum=-2000,
+            maximum=2000,
+            name='reward'
+        )
+    def time_step_spec(self):
+        self._time_step_spec = ts.time_step_spec(observation_spec=self.observation_spec(), reward_spec=self.reward_spec())
+        return self._time_step_spec
+
+    def current_time_step(self):
+        return self._current_time_step
+    
+    def make_time_step_policy(self, i):
+        # self.policy.action(self.full_obs[i])
+        timestep = ts.transition(observation = self.full_obs[i], reward = tf.constant([0]), discount = 1.0)
+        return self.input_converter(self.policy.action(timestep).action.numpy())
+    
+    
+    def step(self, action):
+        action = action.numpy()
+        action = self.input_converter(action)
+        observation, reward, done, info = self.oner(action)
+        self.reward_perso += reward
+        observation = tf.convert_to_tensor(observation)
+        reward = tf.convert_to_tensor(reward)
+        if reward.numpy() != 0:
+            print(f"{reward :.2f}")
+        self._current_time_step = ts.transition(observation=observation, reward=reward, discount=1.0)
+        if all(done):
+            print(f"total_reward: {self.reward_perso}")
+            return ts.termination(observation = observation, reward = reward)
+        else:
+            return ts.transition(observation = observation, reward = reward, discount=1.0)
+    def _step(self, action):
+        return self.step(action)
     def reset(self):
         obs = asyncio.get_event_loop().run_until_complete(self.async_reset())[0]
         obs = tf.convert_to_tensor(obs, dtype=tf.float32)
@@ -178,30 +212,30 @@ class EnvTensorOne(EnvPersoInput, tf_agents.environments.py_environment.PyEnviro
 
     def current_time_step(self):
         return self._current_time_step
-
-
-    def step(self, action):
-        observation, reward, done, info = EnvPersoInput.step(self, action=action)
+    
+    def action_process(self, actions):
+        print("action_process:")
+        print(f"{actions = }")
+        return np.apply_along_axis(self.input_converter, -1, actions)
+    
+    
+    def step(self, actions):
+        actions = actions.numpy()
+        actions = self.action_process(actions)
+        observation, reward, done, info = asyncio.get_event_loop().run_until_complete(self.async_step(actions))
+        observation = tf.convert_to_tensor(observation)
+        reward = tf.convert_to_tensor(reward)
         self._current_time_step = ts.transition(observation=observation, reward=reward, discount=1.0)
-        observation = tf.convert_to_tensor(observation, dtype=tf.float32)
-        reward = tf.convert_to_tensor(reward, dtype=tf.float32)
         if all(done):
-            print("done")
             self.reset()
             return ts.termination(observation = observation, reward = reward)
         else:
-            return ts.transition(observation=observation, reward=reward, discount=1.0)
+            return ts.transition(observation = observation, reward = reward, discount=1.0)
     def _step(self, action):
-        observation, reward, done, info = EnvPersoInput.step(self, action=action)
-        self._current_time_step = ts.transition(observation=observation, reward=reward, discount=1.0)
-        observation = tf.convert_to_tensor(observation, dtype=tf.float32)
-        reward = tf.convert_to_tensor(reward, dtype=tf.float32)
-        if all(done):
-            print("done")
-            self.reset()
-            return ts.termination(observation = observation, reward = reward)
-        else:
-            return ts.transition(observation=observation, reward=reward, discount=1.0)
+        return self.step(action)
+    
+    
+    
 
     # def _step(self, action):
     #     observation, reward, done, info = EnvPersoInput.step(self, action=action)
@@ -223,31 +257,32 @@ class EnvTensorOne(EnvPersoInput, tf_agents.environments.py_environment.PyEnviro
     #     else:
     #         return ts.transition(observation = observation.flatten(), reward=reward, discount = 1.0)
 
-# class tensorEnv(py_environment.PyEnvironment, DerkEnv):
-#     def observation_spec(self):
-#         return tensor_spec.BoundedArraySpec(
-#             shape=(64,),
-#             dtype=np.float32,
-#             minimum=-1.0,
-#             maximum=1.0,
-#             name='observation'
-#         )
 
-#     def action_spec(self):
-#         return tensor_spec.BoundedArraySpec(
-#             shape=(15,), dtype=np.float32, minimum=-1, maximum=1, name='action')
+    # class tensorEnv(py_environment.PyEnvironment, DerkEnv):
+    #     def observation_spec(self):
+    #         return tensor_spec.BoundedArraySpec(
+    #             shape=(64,),
+    #             dtype=np.float32,
+    #             minimum=-1.0,
+    #             maximum=1.0,
+    #             name='observation'
+    #         )
 
-#     def reward_spec(self):
-#         return tensor_spec.BoundedArraySpec(
-#             shape=(),
-#             dtype=tf.float32,
-#             minimum=0,
-#             maximum=np.inf,
-#             name='reward'
-#         )
-#     def time_step_spec(self):
-#         return ts.time_step_spec(observation_spec=self.observation_spec(), reward_spec=self.reward_spec())
+    #     def action_spec(self):
+    #         return tensor_spec.BoundedArraySpec(
+    #             shape=(15,), dtype=np.float32, minimum=-1, maximum=1, name='action')
 
-#     def _reset(self):
+    #     def reward_spec(self):
+    #         return tensor_spec.BoundedArraySpec(
+    #             shape=(),
+    #             dtype=tf.float32,
+    #             minimum=0,
+    #             maximum=np.inf,
+    #             name='reward'
+    #         )
+    #     def time_step_spec(self):
+    #         return ts.time_step_spec(observation_spec=self.observation_spec(), reward_spec=self.reward_spec())
 
-#         return ts.restart(self.observation_spec())
+    #     def _reset(self):
+
+    #         return ts.restart(self.observation_spec())
